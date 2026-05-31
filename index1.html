@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGA 工艺可视化生产线</title>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --primary: #1e3a8a;
+            --secondary: #3b82f6;
+            --accent: #f59e0b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --ink: #1e293b;
+            --muted: #64748b;
+            --line: #cbd5e1;
+            --panel: #ffffff;
+            --bg: #f8fafc;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 14px;
+            font-family: "Helvetica Neue", Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 1440px;
+            height: calc(100vh - 28px);
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            background: linear-gradient(135deg, #1e3a8a, #4f7df3);
+            color: white;
+            padding: 16px 22px;
+            border-radius: 12px;
+            box-shadow: 0 8px 26px rgba(30, 58, 138, 0.18);
+            margin-bottom: 12px;
+            flex: 0 0 auto;
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 26px;
+            letter-spacing: 0;
+        }
+
+        header p {
+            margin: 10px 0 0;
+            color: rgba(255, 255, 255, 0.88);
+            font-size: 14px;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 12px;
+            align-items: start;
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .layout > .panel,
+        .layout > aside {
+            height: 100%;
+        }
+
+        .panel {
+            background: var(--panel);
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px;
+            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .container > .panel:first-of-type {
+            flex: 0 0 auto;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+        }
+
+        .section-title {
+            color: var(--primary);
+            border-left: 5px solid var(--secondary);
+            padding-left: 12px;
+            margin: 0 0 10px;
+            font-size: 19px;
+        }
+
+        .progress-strip {
+            display: grid;
+            grid-template-columns: repeat(7, minmax(90px, 1fr));
+            gap: 6px;
+            margin-bottom: 10px;
+        }
+
+        .station-tab {
+            border: 1px solid var(--line);
+            background: #f8fafc;
+            color: var(--muted);
+            border-radius: 8px;
+            padding: 7px 8px;
+            min-height: 48px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        .station-tab:hover {
+            border-color: var(--secondary);
+            background: #eff6ff;
+        }
+
+        .station-tab.active {
+            border-color: var(--secondary);
+            background: #dbeafe;
+            color: var(--primary);
+            font-weight: 700;
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+        }
+
+        .station-index {
+            display: block;
+            font-size: 11px;
+            color: inherit;
+            opacity: 0.72;
+        }
+
+        .station-name {
+            display: block;
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .visual-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 12px;
+            min-height: 0;
+        }
+
+        .process-stage {
+            min-width: 0;
+        }
+
+        .process-stage .substrate {
+            width: 400px;
+        }
+
+        .process-stage .mold {
+            width: 286px;
+        }
+
+        .process-stage .die {
+            width: 150px;
+        }
+
+        .process-stage .adhesive {
+            width: 178px;
+        }
+
+        .visual-wrap {
+            background: #0f172a;
+            border-radius: 10px;
+            padding: 10px;
+            min-height: 318px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .fab-scene {
+            height: 254px;
+            position: relative;
+            background:
+                linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+            background-size: 28px 28px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .die, .mold, .ball, .flux-dot, .mark-text, .ray-line, .substrate-via, .adhesive,
+        .substrate-label, .bond-pad, .bga-pad, .wire-svg {
+            position: absolute;
+            transition: opacity 0.35s ease, transform 0.35s ease, width 0.35s ease, height 0.35s ease, bottom 0.35s ease;
+        }
+
+        .substrate {
+            position: absolute;
+            left: 50%;
+            bottom: 104px;
+            transform: translateX(-50%);
+            width: 460px;
+            height: 42px;
+            background:
+                linear-gradient(#22c55e 0 9px, #16a34a 9px 18px, #15803d 18px 24px, #16a34a 24px 33px, #22c55e 33px 42px);
+            border-radius: 6px;
+            border: 1px solid rgba(187, 247, 208, 0.35);
+            z-index: 4;
+        }
+
+        .substrate::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 20px;
+            height: 2px;
+            background: rgba(253, 230, 138, 0.8);
+        }
+
+        .substrate-label {
+            left: 50%;
+            bottom: 152px;
+            transform: translateX(-50%);
+            color: #bbf7d0;
+            font-weight: 800;
+            font-size: 13px;
+            z-index: 9;
+            text-shadow: 0 1px 2px rgba(15, 23, 42, 0.8);
+        }
+
+        .substrate-via {
+            bottom: 115px;
+            width: 5px;
+            height: 22px;
+            background: #fde68a;
+            border-radius: 4px;
+            z-index: 5;
+            opacity: 0;
+        }
+
+        .bond-pad {
+            bottom: 146px;
+            width: 34px;
+            height: 6px;
+            background: #fde68a;
+            border-radius: 999px;
+            opacity: 1;
+            z-index: 6;
+        }
+
+        .bga-pad {
+            bottom: 100px;
+            width: 30px;
+            height: 6px;
+            background: #fde68a;
+            border-radius: 999px;
+            opacity: 1;
+            z-index: 6;
+        }
+
+        .die {
+            left: 50%;
+            bottom: 153px;
+            transform: translateX(-50%) translateY(12px);
+            width: 170px;
+            height: 44px;
+            background: #38bdf8;
+            border-bottom: 4px solid #0284c7;
+            border-radius: 6px;
+            opacity: 0;
+            z-index: 7;
+        }
+
+        .die::before {
+            content: "Si 芯片";
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #0f172a;
+            font-weight: 800;
+            font-size: 13px;
+        }
+
+        .adhesive {
+            left: 50%;
+            bottom: 146px;
+            transform: translateX(-50%);
+            width: 190px;
+            height: 7px;
+            background: #fbbf24;
+            border-radius: 999px;
+            opacity: 0;
+            z-index: 6;
+        }
+
+        .wire-svg {
+            left: 50%;
+            bottom: 130px;
+            width: 460px;
+            height: 94px;
+            transform: translateX(-50%);
+            opacity: 0;
+            z-index: 8;
+            pointer-events: none;
+        }
+
+        .wire-svg path {
+            fill: none;
+            stroke: #facc15;
+            stroke-width: 3.2;
+            stroke-linecap: round;
+        }
+
+        .mold {
+            left: 50%;
+            bottom: 146px;
+            transform: translateX(-50%) scaleY(0.65);
+            width: 330px;
+            height: 104px;
+            background: rgba(51, 65, 85, 0.96);
+            border: 1px solid #475569;
+            border-radius: 12px 12px 5px 5px;
+            opacity: 0;
+            z-index: 5;
+        }
+
+        .mold::before {
+            content: "环氧模塑料";
+            position: absolute;
+            top: 10px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: #cbd5e1;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .flux-dot {
+            bottom: 99px;
+            width: 28px;
+            height: 3px;
+            background: rgba(96, 165, 250, 0.7);
+            border-radius: 999px;
+            opacity: 0;
+            z-index: 7;
+        }
+
+        .ball {
+            bottom: 73px;
+            width: 28px;
+            height: 28px;
+            background: #cbd5e1;
+            border-radius: 50%;
+            box-shadow: inset -4px -4px 8px rgba(15, 23, 42, 0.35), 0 2px 4px rgba(15, 23, 42, 0.25);
+            opacity: 0;
+            transform: translateY(-12px) scale(0.8);
+            z-index: 4;
+        }
+
+        .pcb {
+            position: absolute;
+            left: 50%;
+            bottom: 38px;
+            transform: translateX(-50%);
+            width: 560px;
+            height: 30px;
+            background: #059669;
+            border-bottom: 5px solid #047857;
+            border-radius: 5px;
+            opacity: 0;
+            z-index: 2;
+        }
+
+        .pcb::before {
+            content: "PCB 主板";
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .mark-text {
+            left: 50%;
+            bottom: 260px;
+            transform: translateX(-50%);
+            color: #f8fafc;
+            font-family: monospace;
+            font-size: 12px;
+            letter-spacing: 0;
+            opacity: 0;
+            z-index: 9;
+        }
+
+        .ray-line {
+            top: 48px;
+            width: 2px;
+            height: 238px;
+            background: linear-gradient(#93c5fd, transparent);
+            opacity: 0;
+            z-index: 12;
+        }
+
+        .caption {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            color: #cbd5e1;
+            font-size: 12px;
+            margin-top: 12px;
+            min-height: 28px;
+        }
+
+        .caption strong { color: #f8fafc; }
+
+        .process-photo-card {
+            margin-top: 10px;
+            margin-bottom: 10px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px;
+            overflow: hidden;
+        }
+
+        .process-photo-title {
+            margin: 0 0 8px;
+            color: var(--primary);
+            font-size: 14px;
+            font-weight: 800;
+        }
+
+        .process-photo {
+            width: auto;
+            max-width: 100%;
+            height: 220px;
+            max-height: 26vh;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+        }
+
+        .iso-panel {
+            margin-top: 0;
+            display: block;
+            min-height: 318px;
+            align-items: stretch;
+        }
+
+        .iso-info {
+            display: none;
+        }
+
+        .iso-info h3 {
+            color: var(--primary);
+            margin: 0 0 10px;
+            font-size: 18px;
+        }
+
+        .iso-info p, .iso-info li {
+            color: #475569;
+            font-size: 13px;
+        }
+
+        .iso-info ul {
+            margin: 10px 0 16px 18px;
+            padding: 0;
+        }
+
+        .iso-viewer {
+            min-height: 318px;
+            background: #111827;
+            border: 12px solid #1f2937;
+            border-radius: 10px;
+            position: relative;
+            overflow: hidden;
+            cursor: grab;
+            height: 100%;
+        }
+
+        .iso-viewer:active {
+            cursor: grabbing;
+        }
+
+        #bgaThreeViewport {
+            width: 100%;
+            height: 100%;
+            min-height: 294px;
+            position: relative;
+        }
+
+        #bgaThreeViewport canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .three-error {
+            position: absolute;
+            inset: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px dashed rgba(248, 113, 113, 0.55);
+            border-radius: 10px;
+            color: #fecaca;
+            background: rgba(127, 29, 29, 0.22);
+            font-size: 14px;
+            line-height: 1.7;
+            text-align: center;
+            padding: 18px;
+        }
+
+        .iso-label {
+            position: absolute;
+            left: 16px;
+            bottom: 14px;
+            color: #cbd5e1;
+            font-size: 12px;
+        }
+
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+
+        .control-btn {
+            border: none;
+            border-radius: 7px;
+            padding: 9px 13px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: background 0.2s ease, transform 0.2s ease;
+        }
+
+        .control-btn:hover { transform: translateY(-1px); }
+        .primary-btn { background: var(--secondary); color: white; }
+        .primary-btn:hover { background: #2563eb; }
+        .secondary-btn { background: #e2e8f0; color: #334155; }
+        .secondary-btn:hover { background: #cbd5e1; }
+
+        .info-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px;
+            background: white;
+            margin-bottom: 10px;
+        }
+
+        .info-card h3 {
+            margin: 0 0 8px;
+            color: var(--primary);
+            font-size: 16px;
+        }
+
+        .info-card p {
+            margin: 0;
+            color: #475569;
+            font-size: 13px;
+        }
+
+        .info-list {
+            margin: 10px 0 0;
+            padding-left: 20px;
+            color: #475569;
+            font-size: 13px;
+        }
+
+        .risk-card {
+            border-left: 4px solid var(--accent);
+            background: #fffbeb;
+        }
+
+        .mini-quiz {
+            display: none;
+            border-left: 4px solid var(--secondary);
+            background: #eff6ff;
+        }
+
+        .mini-quiz.active { display: block; }
+
+        .quiz-options {
+            display: grid;
+            gap: 8px;
+            margin-top: 12px;
+        }
+
+        .quiz-option {
+            border: 1px solid #bfdbfe;
+            background: white;
+            color: #334155;
+            border-radius: 7px;
+            padding: 9px 10px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 13px;
+        }
+
+        .quiz-option:hover { background: #dbeafe; border-color: var(--secondary); }
+        .quiz-option.correct { background: #dcfce7; border-color: var(--success); color: #14532d; font-weight: 700; }
+        .quiz-option.wrong { background: #fee2e2; border-color: var(--danger); color: #7f1d1d; }
+        .quiz-option.selected { box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18); }
+
+        .quiz-feedback {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 7px;
+            font-size: 13px;
+            max-height: 210px;
+            overflow: auto;
+        }
+
+        .feedback-title {
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .option-notes {
+            margin: 0;
+            padding-left: 18px;
+        }
+
+        .option-notes li {
+            margin: 6px 0;
+        }
+
+        .option-notes strong {
+            color: #0f172a;
+        }
+
+        .option-notes span {
+            display: block;
+            color: #334155;
+        }
+
+        aside {
+            min-height: 0;
+            max-height: 100%;
+            overflow: auto;
+        }
+
+        .scene-substrate .substrate-via { opacity: 0.9; }
+        .scene-die .substrate-label, .scene-wire .substrate-label, .scene-mold .substrate-label, .scene-ball .substrate-label, .scene-reflow .substrate-label, .scene-inspect .substrate-label { opacity: 0; }
+        .scene-die .substrate-via, .scene-wire .substrate-via, .scene-mold .substrate-via, .scene-ball .substrate-via, .scene-reflow .substrate-via, .scene-inspect .substrate-via { opacity: 0.9; }
+        .scene-die .die, .scene-wire .die, .scene-mold .die, .scene-ball .die, .scene-reflow .die, .scene-inspect .die { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .scene-die .adhesive, .scene-wire .adhesive, .scene-mold .adhesive, .scene-ball .adhesive, .scene-reflow .adhesive, .scene-inspect .adhesive { opacity: 1; }
+        .scene-wire .wire-svg, .scene-mold .wire-svg, .scene-ball .wire-svg, .scene-reflow .wire-svg, .scene-inspect .wire-svg { opacity: 1; }
+        .scene-mold .mold, .scene-ball .mold, .scene-reflow .mold, .scene-inspect .mold { opacity: 1; transform: translateX(-50%) scaleY(1); }
+        .scene-ball .flux-dot { opacity: 1; }
+        .scene-ball .ball, .scene-reflow .ball, .scene-inspect .ball { opacity: 1; transform: translateY(0) scale(1); }
+        .scene-reflow .ball, .scene-inspect .ball { bottom: 68px; width: 34px; height: 34px; transform: translateX(-3px) scale(1); border-radius: 50%; background: #e2e8f0; }
+        .scene-reflow .pcb, .scene-inspect .pcb { opacity: 1; }
+        .scene-inspect .mark-text, .scene-inspect .ray-line { opacity: 1; }
+
+        @media (max-width: 920px) {
+            body { padding: 14px; overflow: auto; }
+            .container { height: auto; }
+            .layout { grid-template-columns: 1fr; }
+            .visual-grid { grid-template-columns: 1fr; }
+            .progress-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .visual-wrap { padding: 12px; }
+            .substrate { width: 78%; }
+            .pcb { width: 88%; }
+            .mold { width: 62%; }
+            .iso-viewer { min-height: 300px; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <h1>BGA 工艺可视化生产线</h1>
+        <p>基于课堂 BGA 封装技术课件的 2D 截面推进式互动展示</p>
+    </header>
+
+    <div class="panel">
+        <h2 class="section-title">工艺站点</h2>
+        <div class="progress-strip" id="stationTabs"></div>
+    </div>
+
+    <div class="layout">
+        <main class="panel">
+            <h2 class="section-title">2D 界面图与 3D 可视化图</h2>
+            <div class="visual-grid">
+                <div class="process-stage">
+                    <div class="visual-wrap">
+                        <div class="fab-scene scene-substrate" id="fabScene">
+                            <div class="substrate"></div>
+                            <div class="substrate-label">多层 BT 基板 / Cu 线路 / Ni-Au 焊盘</div>
+                            <div class="substrate-via" style="left:38%;"></div>
+                            <div class="substrate-via" style="left:47%;"></div>
+                            <div class="substrate-via" style="left:53%;"></div>
+                            <div class="substrate-via" style="left:62%;"></div>
+                            <div class="bond-pad" style="left:calc(50% - 158px);"></div>
+                            <div class="bond-pad" style="left:calc(50% + 124px);"></div>
+                            <div class="bga-pad" style="left:calc(50% - 195px);"></div>
+                            <div class="bga-pad" style="left:calc(50% - 105px);"></div>
+                            <div class="bga-pad" style="left:calc(50% - 15px);"></div>
+                            <div class="bga-pad" style="left:calc(50% + 75px);"></div>
+                            <div class="bga-pad" style="left:calc(50% + 165px);"></div>
+
+                            <div class="adhesive"></div>
+                            <div class="die"></div>
+                            <svg class="wire-svg" viewBox="0 0 460 94" preserveAspectRatio="none" aria-hidden="true">
+                                <path d="M165 42 C120 0 94 28 89 75"></path>
+                                <path d="M295 42 C340 0 366 28 371 75"></path>
+                            </svg>
+                            <div class="mold"></div>
+
+                            <div class="flux-dot" style="left:calc(50% - 195px);"></div>
+                            <div class="flux-dot" style="left:calc(50% - 105px);"></div>
+                            <div class="flux-dot" style="left:calc(50% - 15px);"></div>
+                            <div class="flux-dot" style="left:calc(50% + 75px);"></div>
+                            <div class="flux-dot" style="left:calc(50% + 165px);"></div>
+
+                            <div class="ball" style="left:calc(50% - 194px);"></div>
+                            <div class="ball" style="left:calc(50% - 104px);"></div>
+                            <div class="ball" style="left:calc(50% - 14px);"></div>
+                            <div class="ball" style="left:calc(50% + 76px);"></div>
+                            <div class="ball" style="left:calc(50% + 166px);"></div>
+
+                            <div class="pcb"></div>
+                            <div class="mark-text">PBGA 13×13 / Ball Grid Array</div>
+                            <div class="ray-line" style="left:38%;"></div>
+                            <div class="ray-line" style="left:50%;"></div>
+                            <div class="ray-line" style="left:62%;"></div>
+                        </div>
+                        <div class="caption">
+                            <span id="sceneCaption"><strong>当前站点：</strong>基板制备</span>
+                            <span id="sceneCounter">1 / 7</span>
+                        </div>
+                    </div>
+
+                    <div class="controls">
+                        <button class="control-btn secondary-btn" id="prevBtn">上一站</button>
+                        <button class="control-btn primary-btn" id="nextBtn">下一站</button>
+                        <button class="control-btn secondary-btn" id="resetBtn">回到起点</button>
+                    </div>
+                </div>
+
+                <div class="iso-panel">
+                    <div class="iso-info">
+                        <h3>BGA 3D 完成态预览</h3>
+                        <p>模型展示 BGA 完成后的三维空间结构：芯片、金线、塑封体、封装基板、焊球阵列与 PCB 主板。</p>
+                    </div>
+                    <div class="iso-viewer">
+                        <div id="bgaThreeViewport" aria-label="BGA Three.js 三维模型"></div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <aside>
+            <section class="info-card">
+                <h3 id="stationTitle">基板制备站</h3>
+                <p id="stationDesc">在 BT 树脂/玻璃芯板上形成铜线路、通孔金属化和焊盘阵列，为芯片贴装、键合和植球提供基础互连平台。</p>
+                <ul class="info-list" id="stationPoints"></ul>
+            </section>
+
+            <section class="info-card risk-card">
+                <h3>工艺风险提示</h3>
+                <p id="riskText">线路蚀刻不良、阻焊开窗偏差或 Ni/Au 表面处理异常，会影响后续键合和植球可靠性。</p>
+            </section>
+
+            <section class="process-photo-card">
+                <p class="process-photo-title" id="processPhotoTitle">课件工艺配图：基板制备</p>
+                <img id="processPhoto" class="process-photo" src="https://i.ibb.co/Sww3PygT/2026-05-30-222409.png" alt="基板制备工艺配图">
+            </section>
+
+            <section class="info-card mini-quiz active" id="miniQuiz">
+                <h3>随站小问</h3>
+                <p id="quizQuestion">PBGA 基板上 Ni/Au 表面处理的重要作用之一是什么？</p>
+                <div class="quiz-options" id="quizOptions"></div>
+                <div class="quiz-feedback" id="quizFeedback"></div>
+            </section>
+        </aside>
+    </div>
+</div>
+
+<script>
+    const stations = [
+        {
+            id: "substrate",
+            tab: "基板制备",
+            title: "基板制备站",
+            sceneClass: "scene-substrate",
+            image: "https://i.ibb.co/Sww3PygT/2026-05-30-222409.png",
+            imageAlt: "基板制备工艺配图",
+            desc: "在 BT 树脂/玻璃芯板上形成铜线路、通孔金属化和焊盘阵列，为芯片贴装、键合和植球提供基础互连平台。",
+            points: ["层压覆铜板并钻通孔", "通孔金属化形成上下层导通路径", "通过压膜、曝光、显影、蚀刻制作线路", "阻焊膜开窗并进行 Ni/Au 表面处理"],
+            risk: "线路蚀刻不良、阻焊开窗偏差或 Ni/Au 表面处理异常，会影响后续键合和植球可靠性。",
+            quiz: {
+                q: "PBGA 基板上 Ni/Au 表面处理的重要作用之一是什么？",
+                a: "保护铜层并利于金线键合",
+                options: ["降低芯片工作频率", "保护铜层并利于金线键合", "让焊球完全不需要回流", "替代塑封料保护芯片"]
+            }
+        },
+        {
+            id: "die",
+            tab: "芯片贴装",
+            title: "芯片贴装站",
+            sceneClass: "scene-die",
+            image: "https://i.ibb.co/Lhzn2xFg/2026-05-30-222600.png",
+            imageAlt: "芯片粘结 Die Attach 工艺配图",
+            desc: "采用含银环氧树脂粘结剂等材料，把 IC 芯片固定在基板指定区域，建立后续内互连的机械基础。",
+            points: ["点涂或印刷导电胶/粘结剂", "芯片对准放置到基板中心区域", "固化后获得稳定机械支撑"],
+            risk: "粘片偏移、胶量不足或固化异常，可能造成芯片倾斜、热路径变差或后续键合高度不稳定。",
+            quiz: {
+                q: "芯片贴装站首先解决的是哪一类问题？",
+                a: "把芯片可靠固定在基板上",
+                options: ["把芯片可靠固定在基板上", "形成 PCB 板级焊点", "完成 X-Ray 检测", "直接生成塑封外壳"]
+            }
+        },
+        {
+            id: "wire",
+            tab: "金线键合",
+            title: "金线键合站",
+            sceneClass: "scene-wire",
+            image: "https://i.ibb.co/Lhzn2xFg/2026-05-30-222600.png",
+            imageAlt: "引线键合 Wire Bonding 工艺配图",
+            desc: "用金丝球焊等方式，把芯片焊盘与基板焊盘连接起来，形成芯片到封装基板的内互连。",
+            points: ["芯片焊盘与基板焊盘逐点连接", "金线提供电信号传输路径", "键合质量影响开路、虚接和高频寄生参数"],
+            risk: "键合拉力不足、焊点污染或金线弧高异常，可能引起开路、短路或模塑时金线扫线。",
+            quiz: {
+                q: "金线键合在 PBGA 中主要完成什么功能？",
+                a: "芯片到基板的内互连",
+                options: ["芯片到基板的内互连", "基板到 PCB 的外互连", "吸收封装湿气", "形成焊球阵列"]
+            }
+        },
+        {
+            id: "mold",
+            tab: "模塑封装",
+            title: "模塑封装站",
+            sceneClass: "scene-mold",
+            image: "https://i.ibb.co/Xxnm2VmD/2026-05-30-222727.png",
+            imageAlt: "模塑封装 Molding 工艺配图",
+            desc: "用填充石英粉的环氧模塑料包封芯片、金线和焊盘，提供机械保护和环境隔离。",
+            points: ["保护芯片与键合线", "改善封装机械强度", "塑封体吸湿会带来爆米花效应风险"],
+            risk: "模塑空洞、分层、金线扫线或吸湿后回流，会导致开裂、分层和爆米花效应。",
+            quiz: {
+                q: "塑封体吸湿后再次经历高温回流，最典型的风险是什么？",
+                a: "爆米花效应",
+                options: ["爆米花效应", "焊球自对准", "Ni/Au 扩散完全停止", "焊点电阻必然降低"]
+            }
+        },
+        {
+            id: "ball",
+            tab: "BGA 植球",
+            title: "BGA 植球站",
+            sceneClass: "scene-ball",
+            image: "https://i.ibb.co/zTYbmr36/2026-05-30-222827.png",
+            imageAlt: "BGA 植球 Ball Attach 工艺配图",
+            desc: "在基板底部焊盘阵列上涂覆助焊剂，并通过模板、焊球舟、真空吸球等方法放置焊球。",
+            points: ["课件中包括球在上、球在下、真空吸球等植球方法", "焊球位置需要与基板底部 BGA 焊盘阵列精确对应", "图中淡蓝薄层表示助焊剂/焊膏提示，不是新增焊盘"],
+            risk: "缺球、偏球、助焊剂量异常或焊膏印刷不均，会导致开路、桥连或润湿不良。",
+            quiz: {
+                q: "BGA 植球前通常需要在焊盘区域引入什么材料帮助润湿？",
+                a: "助焊剂",
+                options: ["助焊剂", "塑封料", "硅片", "陶瓷盖板"]
+            }
+        },
+        {
+            id: "reflow",
+            tab: "回流成形",
+            title: "氮气回流与板级互连站",
+            sceneClass: "scene-reflow",
+            image: "https://i.ibb.co/qM8J2RLF/2026-05-30-223404.png",
+            imageAlt: "回流焊 Reflow 工艺配图",
+            desc: "焊球在回流过程中熔融、润湿上下焊盘并产生适度塌陷，形成封装基板到 PCB 的板级冶金互连。",
+            points: ["N2 气氛可降低氧化影响", "熔融焊球具有一定自对准能力", "回流的关键是润湿、塌陷高度和界面 IMC 形成，而不是焊球体积变大"],
+            risk: "峰值温度、升温速率或共面性控制不当，可能造成 HIP、虚焊、桥连或焊点空洞。",
+            quiz: {
+                q: "熔融焊球在回流时能帮助器件轻微回正，主要依赖什么作用？",
+                a: "表面张力自对准",
+                options: ["表面张力自对准", "塑封体吸湿", "金线拉力", "X-Ray 穿透"]
+            }
+        },
+        {
+            id: "inspect",
+            tab: "清洗检测",
+            title: "清洗、分离、打标与检测站",
+            sceneClass: "scene-inspect",
+            image: "https://i.ibb.co/qM8J2RLF/2026-05-30-223404.png",
+            imageAlt: "检测 Inspection 工艺配图",
+            desc: "回流后清洗残余助焊剂，完成分离、打标和检测。X-Ray、电测和外观检查用于发现缺球、桥连、开路等问题。",
+            points: ["清洗残留助焊剂，降低腐蚀和离子污染风险", "打标便于批次追溯", "X-Ray 适合检查隐藏焊点缺陷"],
+            risk: "清洗不足、漏检或批次追溯信息缺失，会让潜在缺陷进入后续装配或服役阶段。",
+            quiz: {
+                q: "BGA 底部焊点不可直接目视时，常用哪类方法进行隐藏焊点检查？",
+                a: "X-Ray 检测",
+                options: ["X-Ray 检测", "肉眼直接观察全部焊点", "只测塑封体颜色", "称量芯片质量"]
+            }
+        }
+    ];
+
+    let currentStation = 0;
+
+    document.addEventListener("DOMContentLoaded", () => {
+        renderTabs();
+        bindControls();
+        showStation(0);
+    });
+
+    function renderTabs() {
+        const tabs = document.getElementById("stationTabs");
+        tabs.innerHTML = stations.map((station, index) => `
+            <button class="station-tab" data-index="${index}">
+                <span class="station-index">STEP ${index + 1}</span>
+                <span class="station-name">${station.tab}</span>
+            </button>
+        `).join("");
+        tabs.querySelectorAll(".station-tab").forEach(tab => {
+            tab.addEventListener("click", () => showStation(Number(tab.dataset.index)));
+        });
+    }
+
+    function bindControls() {
+        document.getElementById("prevBtn").addEventListener("click", () => showStation(Math.max(0, currentStation - 1)));
+        document.getElementById("nextBtn").addEventListener("click", () => showStation(Math.min(stations.length - 1, currentStation + 1)));
+        document.getElementById("resetBtn").addEventListener("click", () => showStation(0));
+    }
+
+    function showStation(index) {
+        currentStation = index;
+        const station = stations[index];
+        const scene = document.getElementById("fabScene");
+        scene.className = `fab-scene ${station.sceneClass}`;
+
+        document.querySelectorAll(".station-tab").forEach((tab, tabIndex) => {
+            tab.classList.toggle("active", tabIndex === index);
+        });
+
+        document.getElementById("sceneCaption").innerHTML = `<strong>当前站点：</strong>${station.title}`;
+        document.getElementById("sceneCounter").textContent = `${index + 1} / ${stations.length}`;
+        document.getElementById("stationTitle").textContent = station.title;
+        document.getElementById("stationDesc").textContent = station.desc;
+        document.getElementById("riskText").textContent = station.risk;
+        document.getElementById("stationPoints").innerHTML = station.points.map(point => `<li>${point}</li>`).join("");
+        document.getElementById("processPhotoTitle").textContent = `课件工艺配图：${station.tab}`;
+        const processPhoto = document.getElementById("processPhoto");
+        processPhoto.src = station.image;
+        processPhoto.alt = station.imageAlt;
+        renderQuiz(station.quiz);
+    }
+
+    const quizOptionNotes = {
+        "降低芯片工作频率": "芯片工作频率主要由芯片设计、电源和散热条件决定，不是 Ni/Au 表面处理的直接目的。",
+        "保护铜层并利于金线键合": "Ni/Au 能减缓铜氧化，提供稳定、可键合的金属表面，是基板焊盘表面处理的重要作用。",
+        "让焊球完全不需要回流": "BGA 焊球仍需要经过回流熔融、润湿和冷却凝固，表面处理不能替代回流过程。",
+        "替代塑封料保护芯片": "塑封料负责包覆芯片和金线；Ni/Au 只作用于焊盘表面，不能承担封装外壳保护。",
+        "把芯片可靠固定在基板上": "芯片贴装的核心是用粘结剂把芯片定位并固定，为后续金线键合提供稳定高度和位置。",
+        "形成 PCB 板级焊点": "PCB 板级焊点是在 BGA 焊球与 PCB 焊盘回流互连时形成的，不属于芯片贴装站。",
+        "完成 X-Ray 检测": "X-Ray 属于后段检测手段，用于观察隐藏焊点或内部缺陷，不是贴装动作本身。",
+        "直接生成塑封外壳": "塑封外壳来自模塑封装工序，通常发生在芯片贴装和引线键合之后。",
+        "芯片到基板的内互连": "金线键合把芯片焊盘连接到封装基板焊盘，完成封装内部电信号通路。",
+        "基板到 PCB 的外互连": "基板到 PCB 的外互连由 BGA 焊球完成，不是金线键合的主要任务。",
+        "吸收封装湿气": "吸湿是塑封材料可靠性风险之一，金线键合并不用于吸收湿气。",
+        "形成焊球阵列": "焊球阵列来自植球工序，金线键合只处理芯片与基板之间的细金属引线。",
+        "爆米花效应": "塑封体吸湿后在高温回流中汽化膨胀，可能造成分层或开裂，这就是爆米花效应。",
+        "焊球自对准": "焊球自对准发生在回流熔融阶段，来源于表面张力，不是吸湿后的主要风险。",
+        "Ni/Au 扩散完全停止": "金属扩散不会因为塑封体吸湿而完全停止，这不是典型封装失效表述。",
+        "焊点电阻必然降低": "吸湿和分层通常恶化可靠性，不会保证焊点电阻下降。",
+        "助焊剂": "助焊剂能去除/抑制氧化并改善润湿，是植球前常见的辅助材料。",
+        "塑封料": "塑封料用于包覆芯片和金线，不用于帮助焊球润湿焊盘。",
+        "硅片": "硅片是芯片主体材料，不是植球润湿辅助材料。",
+        "陶瓷盖板": "陶瓷盖板常见于部分气密封装结构，不是 PBGA 植球前润湿材料。",
+        "表面张力自对准": "回流时熔融焊料会在润湿焊盘间通过表面张力产生自对准趋势，修正小偏移。",
+        "塑封体吸湿": "塑封体吸湿是可靠性风险，不会提供器件回正能力。",
+        "金线拉力": "金线拉力关注键合强度；BGA 回流回正主要来自熔融焊料的表面张力。",
+        "X-Ray 穿透": "X-Ray 是检测方法，可以观察隐藏焊点，但不是焊球回正的物理机制。",
+        "X-Ray 检测": "X-Ray 能穿透封装和 PCB，适合检查 BGA 底部隐藏焊点的缺球、桥连、空洞等缺陷。",
+        "肉眼直接观察全部焊点": "BGA 焊点位于封装底部，装配后多数不可直接目视观察。",
+        "只测塑封体颜色": "塑封体颜色不能判断底部隐藏焊点的连接状态。",
+        "称量芯片质量": "称量不能定位 BGA 焊点内部缺陷，不能替代电测或 X-Ray 检测。"
+    };
+
+    function escapeHTML(text) {
+        return String(text).replace(/[&<>"']/g, char => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            "\"": "&quot;",
+            "'": "&#39;"
+        }[char]));
+    }
+
+    function getOptionNote(option, quiz) {
+        if (quizOptionNotes[option]) return quizOptionNotes[option];
+        return option === quiz.a
+            ? "这个选项抓住了本站工艺的核心功能。"
+            : "这个选项与本站工艺目标不匹配，可对照正确答案理解工序边界。";
+    }
+
+    function renderQuiz(quiz) {
+        const feedback = document.getElementById("quizFeedback");
+        document.getElementById("quizQuestion").textContent = quiz.q;
+        document.getElementById("quizOptions").innerHTML = quiz.options.map(option => `
+            <button class="quiz-option" data-value="${option}">${option}</button>
+        `).join("");
+        feedback.style.display = "none";
+        feedback.innerHTML = "";
+
+        document.querySelectorAll(".quiz-option").forEach(button => {
+            button.addEventListener("click", () => {
+                const isCorrect = button.dataset.value === quiz.a;
+                document.querySelectorAll(".quiz-option").forEach(optionBtn => {
+                    optionBtn.classList.remove("correct", "wrong", "selected");
+                    if (optionBtn.dataset.value === quiz.a) optionBtn.classList.add("correct");
+                });
+                button.classList.add("selected");
+                if (!isCorrect) button.classList.add("wrong");
+                feedback.style.display = "block";
+                feedback.style.background = isCorrect ? "#dcfce7" : "#fee2e2";
+                feedback.style.color = isCorrect ? "#14532d" : "#7f1d1d";
+                feedback.innerHTML = `
+                    <div class="feedback-title">${isCorrect ? "回答正确。" : `再想想，关键答案是：${escapeHTML(quiz.a)}`}</div>
+                    <ul class="option-notes">
+                        ${quiz.options.map(option => `
+                            <li>
+                                <strong>${escapeHTML(option)}${option === quiz.a ? "（正确）" : ""}</strong>
+                                <span>${escapeHTML(getOptionNote(option, quiz))}</span>
+                            </li>
+                        `).join("")}
+                    </ul>
+                `;
+            });
+        });
+    }
+</script>
+<script type="module">
+    const viewport = document.getElementById("bgaThreeViewport");
+
+    function showThreeError(error) {
+        viewport.innerHTML = `<div class="three-error">BGA 3D 模型加载失败。<br>${error.message || error}</div>`;
+    }
+
+    try {
+    const THREE = await import("three");
+    const { OrbitControls } = await import("three/addons/controls/OrbitControls.js");
+
+    const scene3d = new THREE.Scene();
+    scene3d.background = new THREE.Color(0x111827);
+
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(7.5, 5.2, 7.5);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    viewport.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.rotateSpeed = 0.7;
+    controls.zoomSpeed = 0.8;
+    controls.minDistance = 4;
+    controls.maxDistance = 18;
+    controls.target.set(0, 0.25, 0);
+
+    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x111827, 1.4);
+    scene3d.add(hemiLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.5);
+    keyLight.position.set(5, 8, 6);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    keyLight.shadow.camera.near = 1;
+    keyLight.shadow.camera.far = 30;
+    keyLight.shadow.camera.left = -8;
+    keyLight.shadow.camera.right = 8;
+    keyLight.shadow.camera.top = 8;
+    keyLight.shadow.camera.bottom = -8;
+    scene3d.add(keyLight);
+
+    const fillLight = new THREE.PointLight(0x60a5fa, 1.2, 18);
+    fillLight.position.set(-5, 3, -4);
+    scene3d.add(fillLight);
+
+    const mats = {
+        pcb: new THREE.MeshStandardMaterial({ color: 0x059669, roughness: 0.58, metalness: 0.04 }),
+        substrate: new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.5, metalness: 0.05 }),
+        copper: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.28, metalness: 0.55 }),
+        adhesive: new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.62, metalness: 0.02 }),
+        die: new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.35, metalness: 0.18 }),
+        mold: new THREE.MeshStandardMaterial({
+            color: 0x64748b,
+            roughness: 0.38,
+            metalness: 0,
+            transparent: true,
+            opacity: 0.34,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        }),
+        solder: new THREE.MeshStandardMaterial({ color: 0xdbe4ef, roughness: 0.2, metalness: 0.42 }),
+        gold: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.24, metalness: 0.65 }),
+        boardTrace: new THREE.MeshStandardMaterial({ color: 0x86efac, roughness: 0.45, metalness: 0.08 }),
+        floor: new THREE.MeshStandardMaterial({
+            color: 0x000000,
+            roughness: 1,
+            metalness: 0,
+            transparent: true,
+            opacity: 0.22
+        })
+    };
+
+    function addBox(name, size, position, material, cast = true, receive = true) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), material);
+        mesh.name = name;
+        mesh.position.set(position.x, position.y, position.z);
+        mesh.castShadow = cast;
+        mesh.receiveShadow = receive;
+        scene3d.add(mesh);
+        return mesh;
+    }
+
+    function addCylinder(name, radius, depth, position, material, rotationX = Math.PI / 2) {
+        const mesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, depth, 40), material);
+        mesh.name = name;
+        mesh.rotation.x = rotationX;
+        mesh.position.set(position.x, position.y, position.z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        scene3d.add(mesh);
+        return mesh;
+    }
+
+    addBox("pcb-board", { x: 6.8, y: 0.18, z: 4.1 }, { x: 0, y: -0.95, z: 0 }, mats.pcb);
+    addBox("package-substrate", { x: 4.4, y: 0.22, z: 2.7 }, { x: 0, y: 0.02, z: 0 }, mats.substrate);
+    addBox("die-attach-adhesive", { x: 1.55, y: 0.08, z: 1.15 }, { x: 0, y: 0.26, z: 0 }, mats.adhesive);
+    addBox("silicon-die", { x: 1.35, y: 0.22, z: 0.95 }, { x: 0, y: 0.43, z: 0 }, mats.die);
+    addBox("left-front-chip-bond-pad", { x: 0.24, y: 0.025, z: 0.14 }, { x: -0.42, y: 0.565, z: 0.5 }, mats.copper);
+    addBox("right-front-chip-bond-pad", { x: 0.24, y: 0.025, z: 0.14 }, { x: 0.42, y: 0.565, z: 0.5 }, mats.copper);
+    addBox("left-back-chip-bond-pad", { x: 0.24, y: 0.025, z: 0.14 }, { x: -0.42, y: 0.565, z: -0.5 }, mats.copper);
+    addBox("right-back-chip-bond-pad", { x: 0.24, y: 0.025, z: 0.14 }, { x: 0.42, y: 0.565, z: -0.5 }, mats.copper);
+    const moldBody = addBox("mold-compound", { x: 2.65, y: 0.75, z: 1.75 }, { x: 0, y: 0.76, z: 0 }, mats.mold, false, true);
+    moldBody.renderOrder = 3;
+
+    for (const x of [-1.75, -0.85, 0, 0.85, 1.75]) {
+        addBox("bga-bottom-pad", { x: 0.34, y: 0.04, z: 0.22 }, { x, y: -0.12, z: -1.02 }, mats.copper);
+        addBox("bga-bottom-pad", { x: 0.34, y: 0.04, z: 0.22 }, { x, y: -0.12, z: 1.02 }, mats.copper);
+        addBox("pcb-pad", { x: 0.38, y: 0.035, z: 0.24 }, { x, y: -0.82, z: -1.02 }, mats.copper);
+        addBox("pcb-pad", { x: 0.38, y: 0.035, z: 0.24 }, { x, y: -0.82, z: 1.02 }, mats.copper);
+    }
+
+    for (const x of [-1.75, -0.85, 0, 0.85, 1.75]) {
+        for (const z of [-1.02, 1.02]) {
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(0.315, 56, 36), mats.solder);
+            ball.position.set(x, -0.471, z);
+            ball.scale.y = 1.05;
+            ball.castShadow = true;
+            ball.receiveShadow = true;
+            scene3d.add(ball);
+        }
+    }
+
+    for (const x of [-1.8, -0.9, 0, 0.9, 1.8]) {
+        addBox("substrate-copper-trace", { x: 0.5, y: 0.025, z: 0.05 }, { x, y: 0.17, z: 0 }, mats.boardTrace, true, false);
+    }
+
+    addBox("left-front-substrate-bond-pad", { x: 0.34, y: 0.035, z: 0.18 }, { x: -1.15, y: 0.18, z: 0.62 }, mats.copper);
+    addBox("right-front-substrate-bond-pad", { x: 0.34, y: 0.035, z: 0.18 }, { x: 1.15, y: 0.18, z: 0.62 }, mats.copper);
+    addBox("left-back-substrate-bond-pad", { x: 0.34, y: 0.035, z: 0.18 }, { x: -1.15, y: 0.18, z: -0.62 }, mats.copper);
+    addBox("right-back-substrate-bond-pad", { x: 0.34, y: 0.035, z: 0.18 }, { x: 1.15, y: 0.18, z: -0.62 }, mats.copper);
+
+    function addBondWire(points) {
+        const curve = new THREE.CatmullRomCurve3(points.map(p => new THREE.Vector3(p.x, p.y, p.z)));
+        const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.018, 12, false), mats.gold);
+        tube.castShadow = true;
+        scene3d.add(tube);
+    }
+
+    addBondWire([
+        { x: -0.42, y: 0.595, z: 0.5 },
+        { x: -0.76, y: 1.1, z: 0.62 },
+        { x: -1.15, y: 0.216, z: 0.62 }
+    ]);
+    addBondWire([
+        { x: 0.42, y: 0.595, z: 0.5 },
+        { x: 0.76, y: 1.1, z: 0.62 },
+        { x: 1.15, y: 0.216, z: 0.62 }
+    ]);
+    addBondWire([
+        { x: -0.42, y: 0.595, z: -0.5 },
+        { x: -0.76, y: 1.1, z: -0.62 },
+        { x: -1.15, y: 0.216, z: -0.62 }
+    ]);
+    addBondWire([
+        { x: 0.42, y: 0.595, z: -0.5 },
+        { x: 0.76, y: 1.1, z: -0.62 },
+        { x: 1.15, y: 0.216, z: -0.62 }
+    ]);
+
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 8), mats.floor);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -1.08;
+    floor.receiveShadow = true;
+    scene3d.add(floor);
+
+    function resizeThreeViewer() {
+        const rect = viewport.getBoundingClientRect();
+        const width = Math.max(320, rect.width);
+        const height = Math.max(320, rect.height);
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height, false);
+    }
+
+    const resizeObserver = new ResizeObserver(resizeThreeViewer);
+    resizeObserver.observe(viewport);
+    resizeThreeViewer();
+
+    function animateThree() {
+        requestAnimationFrame(animateThree);
+        controls.update();
+        renderer.render(scene3d, camera);
+    }
+
+    animateThree();
+    } catch (error) {
+        showThreeError(error);
+        console.error("BGA Three.js viewer failed:", error);
+    }
+</script>
+</body>
+</html>
