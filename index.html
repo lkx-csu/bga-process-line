@@ -1122,7 +1122,6 @@
         }),
         solder: new THREE.MeshStandardMaterial({ color: 0xdbe4ef, roughness: 0.2, metalness: 0.42 }),
         gold: new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.24, metalness: 0.65 }),
-        boardTrace: new THREE.MeshStandardMaterial({ color: 0x86efac, roughness: 0.45, metalness: 0.08 }),
         floor: new THREE.MeshStandardMaterial({
             color: 0x000000,
             roughness: 1,
@@ -1180,10 +1179,6 @@
             ball.receiveShadow = true;
             scene3d.add(ball);
         }
-    }
-
-    for (const x of [-1.8, -0.9, 0, 0.9, 1.8]) {
-        addBox("substrate-copper-trace", { x: 0.5, y: 0.025, z: 0.05 }, { x, y: 0.17, z: 0 }, mats.boardTrace, true, false);
     }
 
     addBox("left-front-substrate-bond-pad", { x: 0.34, y: 0.035, z: 0.18 }, { x: -1.15, y: 0.18, z: 0.62 }, mats.copper);
